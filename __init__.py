@@ -29,22 +29,49 @@ class CreateAssetCatalog(bpy.types.Operator):
         if not collections:
             self.report({"WARNING"}, "No collections selected.")
             return {"CANCELLED"}
+
+        catalog_path = get_catalog_path()
+        if not catalog_path:
+            self.report({"ERROR"}, "Save the .blend file first, then create asset catalogs.")
+            print("Cant create blender_assets.cats.txt: .blend file is not saved yet.")
+            return {"CANCELLED"}
+
+        try:
+            # Create blender_assets.cats.txt if it does not exist yet and make sure it starts with VERSION 1.
+            ensure_catalog_file_has_version(catalog_path)
+        except Exception as error:
+            self.report({"ERROR"}, f"Could not create blender_assets.cats.txt: {error}")
+            print(f"Could not create blender_assets.cats.txt at {catalog_path}: {error}")
+            return {"CANCELLED"}
         
         global existing_catalogs
         existing_catalogs = read_existing_catalogs()
         
+        processed_catalogs = 0
+        failed_catalogs = []
+
         for coll in collections:
             hierarchy_name = sanitize_name(coll.name)
             catalog_uuid = create_catalog(hierarchy_name, existing_catalogs)
             if catalog_uuid:
+                processed_catalogs += 1
                 mark_collection_objects_as_assets(coll, catalog_uuid, hierarchy_name)
+            else:
+                failed_catalogs.append(hierarchy_name)
+
+        if processed_catalogs == 0:
+            self.report({"ERROR"}, "Asset catalogs were not created. Check the console for details.")
+            return {"CANCELLED"}
         
         for area in bpy.context.screen.areas:
             if area.ui_type == 'ASSETS':
                 with bpy.context.temp_override(area=area):
                     bpy.ops.asset.library_refresh()
 
-        self.report({"INFO"}, "Asset catalogs created.") 
+        if failed_catalogs:
+            self.report({"WARNING"}, f"Created {processed_catalogs} catalog(s), failed: {', '.join(failed_catalogs)}")
+        else:
+            self.report({"INFO"}, f"Asset catalogs created: {processed_catalogs}.")
         return {"FINISHED"}
 
 
@@ -170,7 +197,7 @@ def create_catalog(catalog_full_name, existing_catalogs):
     catalog_path = get_catalog_path()
 
     if not catalog_path:
-        print("Cant find Asset Library Path. Make Sure .blend file is saved and blender_assets.cats.txt exists right before the .blend file.")
+        print("Cant create blender_assets.cats.txt: .blend file is not saved yet.")
         return None
     
     try:
