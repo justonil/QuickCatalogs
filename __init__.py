@@ -138,6 +138,29 @@ def read_existing_catalogs():
 
 
 
+def ensure_catalog_file_has_version(catalog_path):
+    version_line = "VERSION 1"
+
+    if not os.path.exists(catalog_path):
+        with open(catalog_path, "w") as file:
+            file.write(f"{version_line}\n\n")
+        return
+
+    with open(catalog_path, "r") as file:
+        content = file.read()
+
+    first_non_ignored_line = None
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            first_non_ignored_line = stripped
+            break
+
+    if first_non_ignored_line != version_line:
+        with open(catalog_path, "w") as file:
+            file.write(f"{version_line}\n\n{content}")
+
+
 def create_catalog(catalog_full_name, existing_catalogs):
     if catalog_full_name in existing_catalogs:
         return existing_catalogs[catalog_full_name]
@@ -151,6 +174,7 @@ def create_catalog(catalog_full_name, existing_catalogs):
         return None
     
     try:
+        ensure_catalog_file_has_version(catalog_path)
         with open(catalog_path, "a") as file:
             file.write(catalog_line)
         existing_catalogs[catalog_full_name] = catalog_uuid
